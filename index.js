@@ -114,7 +114,7 @@ async function generateGeneralResponse(userInput) {
                 { role: "system", content: "You are a helpful chatbot. If the user asks a general question, provide a relevant response." },
                 { role: "user", content: userInput }
             ],
-            temperature: 0.7
+            temperature: 0.5
         });
 
         return response.choices[0]?.message?.content.trim();
