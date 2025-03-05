@@ -11,12 +11,64 @@ const rl = readline.createInterface({
     output: process.stdout
 });
 
-async function analyzeText(userInput) {
+async function extractTradeDetails(userInput) {
     try {
         const response = await openai.chat.completions.create({
             model: "gpt-4o",
             messages: [
-                { role: "system", content: "Analyze the user input. If it is a trade-related request, extract details as JSON with fields: coinname, type (Buy/Sell), minimumAmount, and defaultValue (always null). If it is a general conversation (e.g., 'hi', 'hello', 'how are you?'), respond appropriately as a chatbot without JSON." },
+                { 
+                    role: "system", 
+                    content: `Extract trade details from user input and return JSON.
+                    - "action" should be "buy" or "sell" only (convert "swap" to "buy").
+                    - "amount" should be extracted as a number.
+                    - "currency" should be extracted from the input (USD, USDT, etc.).
+                    - "coinname" should be the cryptocurrency being traded.
+                    - "condition" should capture any conditions provided.
+                    - If no trade details are found, return "NO_TRADE".`
+                },
+                { role: "user", content: `Analyze the following input and extract trade details in JSON format:\n\n"${userInput}"` }
+            ],
+            temperature: 0.3
+        });
+
+        const content = response.choices[0]?.message?.content.trim();
+
+        if (content === "NO_TRADE") {
+            return null;
+        }
+
+        const jsonMatch = content.match(/```json([\s\S]*?)```/);
+        if (jsonMatch) {
+            let tradeData = JSON.parse(jsonMatch[1]);
+
+            if (Array.isArray(tradeData)) {
+                tradeData.forEach(trade => {
+                    if (trade.action.toLowerCase() === "swap") {
+                        trade.action = "buy";
+                    }
+                });
+            } else {
+                if (tradeData.action.toLowerCase() === "swap") {
+                    tradeData.action = "buy";
+                }
+            }
+
+            return tradeData;
+        } else {
+            return null;
+        }
+    } catch (error) {
+        console.error("Error extracting trade details:", error);
+        return null;
+    }
+}
+
+async function generateGeneralResponse(userInput) {
+    try {
+        const response = await openai.chat.completions.create({
+            model: "gpt-4o",
+            messages: [
+                { role: "system", content: "You are a helpful chatbot. If the user asks a general question, provide a friendly response." },
                 { role: "user", content: userInput }
             ],
             temperature: 0.7
@@ -24,24 +76,25 @@ async function analyzeText(userInput) {
 
         return response.choices[0]?.message?.content.trim();
     } catch (error) {
-        console.error("Error analyzing text:", error);
-        return "Sorry, I couldn't process your request.";
+        console.error("Error generating response:", error);
+        return "I'm having trouble understanding you right now.";
     }
 }
 
 async function chatWithBot(userInput) {
     try {
-        const responseText = await analyzeText(userInput);
-        
-        // Check if response contains JSON
-        if (responseText.startsWith("{") && responseText.endsWith("}")) {
-            const jsonStart = responseText.indexOf('{');
-            const jsonEnd = responseText.lastIndexOf('}') + 1;
-            const jsonString = responseText.substring(jsonStart, jsonEnd);
-            const tradeDetails = JSON.parse(jsonString);
-            console.log("Extracted JSON:", JSON.stringify(tradeDetails, null, 2));
+        if (!userInput.trim()) {
+            console.log("Please enter a valid query.");
+            return;
+        }
+
+        const extractedTrades = await extractTradeDetails(userInput);
+
+        if (extractedTrades) {
+            console.log("Trade Details:", JSON.stringify(extractedTrades, null, 2));
         } else {
-            console.log("Bot:", responseText);
+            const generalResponse = await generateGeneralResponse(userInput);
+            console.log("Bot:", generalResponse);
         }
     } catch (error) {
         console.error("Error:", error);
