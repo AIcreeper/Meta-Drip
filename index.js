@@ -22,7 +22,8 @@ const coinDictionary = {
     "ltc": "Litecoin",
     "dot": "Polkadot",
     "doge": "Dogecoin",
-    "matic": "Polygon"
+    "matic": "Polygon",
+    "pepe": "Pepe Coin"
 };
 
 async function extractTradeDetails(userInput) {
@@ -39,7 +40,10 @@ async function extractTradeDetails(userInput) {
                     - "coin_quantity" should be null unless the user explicitly mentions an amount in crypto.
                     - "currency" is included only when a fiat amount is given.
                     - "coinname" should always be the full name of the cryptocurrency.
-                    - "condition" should always exist, even if null.
+                    - "condition" should always exist and be formatted based on rules:
+                        1. If a price is mentioned (e.g., "if BTC crosses $60K"), return only "$60K".
+                        2. If a market trend is mentioned (e.g., "bull phase" or "bear phase"), return "bullish" or "bearish".
+                        3. If no clear condition is found, return null.
                     - If no valid trade details are found, return "NO_TRADE".`
                 },
                 { role: "user", content: `Analyze this input and return trade details as JSON:\n\n"${userInput}"` }
@@ -73,10 +77,23 @@ async function extractTradeDetails(userInput) {
                     trade.coinname = coinDictionary[trade.coinname.toLowerCase()];
                 }
 
+                // Extract condition formatting
+                if (trade.condition) {
+                    const priceMatch = trade.condition.match(/\$\d+K?/i);
+                    if (priceMatch) {
+                        trade.condition = priceMatch[0]; // Extracts "$60K"
+                    } else if (/bull|bullish/i.test(trade.condition)) {
+                        trade.condition = "bullish";
+                    } else if (/bear|bearish/i.test(trade.condition)) {
+                        trade.condition = "bearish";
+                    } else {
+                        trade.condition = null;
+                    }
+                }
+
                 // Ensure required fields always exist
                 trade.amount = trade.amount !== undefined ? trade.amount : null;
                 trade.coin_quantity = trade.coin_quantity !== undefined ? trade.coin_quantity : null;
-                trade.condition = trade.condition !== undefined ? trade.condition : null;
             });
 
             return trades.length === 1 ? trades[0] : trades;
