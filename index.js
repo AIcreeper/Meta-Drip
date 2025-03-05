@@ -11,6 +11,20 @@ const rl = readline.createInterface({
     output: process.stdout
 });
 
+// Mapping for coin abbreviations to full names
+const coinDictionary = {
+    "sol": "Solana",
+    "btc": "Bitcoin",
+    "eth": "Ethereum",
+    "usdt": "Tether",
+    "ada": "Cardano",
+    "xrp": "XRP",
+    "ltc": "Litecoin",
+    "dot": "Polkadot",
+    "doge": "Dogecoin",
+    "matic": "Polygon"
+};
+
 async function extractTradeDetails(userInput) {
     try {
         const response = await openai.chat.completions.create({
@@ -18,45 +32,57 @@ async function extractTradeDetails(userInput) {
             messages: [
                 { 
                     role: "system", 
-                    content: `Extract trade details from user input and return JSON.
-                    - "action" should be "buy" or "sell" only (convert "swap" to "buy").
-                    - "amount" should be extracted as a number.
-                    - "currency" should be extracted from the input (USD, USDT, etc.).
-                    - "coinname" should be the cryptocurrency being traded.
-                    - "condition" should capture any conditions provided.
-                    - If no trade details are found, return "NO_TRADE".`
+                    content: `Extract trade details from user input and return a JSON array.
+                    - If multiple trades exist, return an array of objects.
+                    - "action" should be "buy" or "sell". Convert "swap" to "buy".
+                    - "amount" should be null unless a fiat value is explicitly mentioned.
+                    - "coin_quantity" should be null unless the user explicitly mentions an amount in crypto.
+                    - "currency" is included only when a fiat amount is given.
+                    - "coinname" should always be the full name of the cryptocurrency.
+                    - "condition" should always exist, even if null.
+                    - If no valid trade details are found, return "NO_TRADE".`
                 },
-                { role: "user", content: `Analyze the following input and extract trade details in JSON format:\n\n"${userInput}"` }
+                { role: "user", content: `Analyze this input and return trade details as JSON:\n\n"${userInput}"` }
             ],
             temperature: 0.3
         });
 
         const content = response.choices[0]?.message?.content.trim();
-
         if (content === "NO_TRADE") {
             return null;
         }
 
         const jsonMatch = content.match(/```json([\s\S]*?)```/);
         if (jsonMatch) {
-            let tradeData = JSON.parse(jsonMatch[1]);
+            let trades = JSON.parse(jsonMatch[1]);
 
-            if (Array.isArray(tradeData)) {
-                tradeData.forEach(trade => {
-                    if (trade.action.toLowerCase() === "swap") {
-                        trade.action = "buy";
-                    }
-                });
-            } else {
-                if (tradeData.action.toLowerCase() === "swap") {
-                    tradeData.action = "buy";
-                }
+            if (!Array.isArray(trades)) {
+                trades = [trades];
             }
 
-            return tradeData;
-        } else {
-            return null;
+            trades.forEach(trade => {
+                if (!trade || typeof trade !== "object") return;
+
+                // Convert "swap" to "buy"
+                if (trade.action && trade.action.toLowerCase() === "swap") {
+                    trade.action = "buy";
+                }
+
+                // Convert coin abbreviations to full names
+                if (trade.coinname && coinDictionary[trade.coinname.toLowerCase()]) {
+                    trade.coinname = coinDictionary[trade.coinname.toLowerCase()];
+                }
+
+                // Ensure required fields always exist
+                trade.amount = trade.amount !== undefined ? trade.amount : null;
+                trade.coin_quantity = trade.coin_quantity !== undefined ? trade.coin_quantity : null;
+                trade.condition = trade.condition !== undefined ? trade.condition : null;
+            });
+
+            return trades.length === 1 ? trades[0] : trades;
         }
+
+        return null;
     } catch (error) {
         console.error("Error extracting trade details:", error);
         return null;
@@ -68,7 +94,7 @@ async function generateGeneralResponse(userInput) {
         const response = await openai.chat.completions.create({
             model: "gpt-4o",
             messages: [
-                { role: "system", content: "You are a helpful chatbot. If the user asks a general question, provide a friendly response." },
+                { role: "system", content: "You are a helpful chatbot. If the user asks a general question, provide a relevant response." },
                 { role: "user", content: userInput }
             ],
             temperature: 0.7
