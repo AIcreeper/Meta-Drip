@@ -26,6 +26,25 @@ const coinDictionary = {
     "pepe": "PEPE"
 };
 
+// Function to convert values like "$300K" → 300000, "$1M" → 1000000
+function convertAmountToNumber(amountStr) {
+    if (!amountStr) return null;
+    
+    // Ensure input is a string
+    const amountStrCleaned = String(amountStr).trim();
+
+    const match = amountStrCleaned.match(/\$?(\d+(?:\.\d+)?)([KkMm]?)/);
+    if (!match) return null;
+
+    let value = parseFloat(match[1]);
+    const suffix = match[2].toUpperCase();
+
+    if (suffix === "K") value *= 1000;
+    if (suffix === "M") value *= 1000000;
+
+    return Math.round(value);
+}
+
 async function extractTradeDetails(userInput) {
     try {
         const response = await openai.chat.completions.create({
@@ -38,9 +57,7 @@ async function extractTradeDetails(userInput) {
                     - "action" should be "buy" or "sell". Convert "swap" to "buy".
                     - "coin_quantity" should be extracted if a number is mentioned for crypto.
                     - "coinSymbol" should always be the abbreviation (e.g., "BTC" for Bitcoin).
-                    - "condition" should only exist when a numeric condition is found (e.g., "if BTC crosses $60K" → "$60K").
-                    - If the condition mentions a cryptocurrency amount, extract it (e.g., "if a whale buys 500 BTC" → "500 BTC").
-                    - If the condition mentions a dollar amount, extract it (e.g., "if value purchase $300K amount of BTC" → "$300K").
+                    - "condition" should only exist when a numeric condition is found (e.g., "if BTC crosses $60K" → 60000, "if a whale buys $1M BTC" → 1000000).
                     - If no valid trade details are found, return "NO_TRADE".`
                 },
                 { role: "user", content: `Analyze this input and return trade details as JSON:\n\n"${userInput}"` }
@@ -74,20 +91,9 @@ async function extractTradeDetails(userInput) {
                     trade.coinSymbol = coinDictionary[trade.coinSymbol.toLowerCase()];
                 }
 
-                // Extract numeric conditions correctly
+                // Ensure the condition is properly formatted
                 if (trade.condition) {
-                    if (typeof trade.condition === "string") {
-                        const priceMatch = trade.condition.match(/\$?\d+K?/i);
-                        const coinMatch = trade.condition.match(/(\d+)\s*(BTC|ETH|SOL|ADA|XRP|LTC|DOT|DOGE|MATIC|PEPE)/i);
-
-                        if (priceMatch) {
-                            trade.condition = priceMatch[0]; // Extracts "$300K" or "60K"
-                        } else if (coinMatch) {
-                            trade.condition = `${coinMatch[1]} ${coinMatch[2].toUpperCase()}`; // Extracts "500 BTC"
-                        } else {
-                            trade.condition = null;
-                        }
-                    }
+                    trade.condition = convertAmountToNumber(trade.condition);
                 } else {
                     trade.condition = null;
                 }
