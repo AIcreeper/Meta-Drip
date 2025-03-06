@@ -13,17 +13,17 @@ const rl = readline.createInterface({
 
 // Coin abbreviation mapping
 const coinDictionary = {
-    "sol": "SOL",
-    "btc": "BTC",
-    "eth": "ETH",
-    "usdt": "USDT",
-    "ada": "ADA",
+    "sol": "Solana",
+    "btc": "Bitcoin",
+    "eth": "Ethereum",
+    "usdt": "Tether",
+    "ada": "Cardano",
     "xrp": "XRP",
-    "ltc": "LTC",
-    "dot": "DOT",
-    "doge": "DOGE",
-    "matic": "MATIC",
-    "pepe": "PEPE"
+    "ltc": "Litecoin",
+    "dot": "Polkadot",
+    "doge": "Dogecoin",
+    "matic": "Polygon",
+    "pepe": "Pepe"
 };
 
 // Function to convert values like "$300K" → 300000, "$1M" → 1000000
@@ -56,7 +56,7 @@ async function extractTradeDetails(userInput) {
                     - If multiple trades exist, return an array.
                     - "action" should be "buy" or "sell". Convert "swap" to "buy".
                     - "coin_quantity" should be extracted if a number is mentioned for crypto.
-                    - "coinSymbol" should always be the abbreviation (e.g., "BTC" for Bitcoin).
+                    - "coinname" should be the full name (e.g., "Bitcoin" instead of "BTC").
                     - "condition" should only exist when a numeric condition is found (e.g., "if BTC crosses $60K" → 60000, "if a whale buys $1M BTC" → 1000000).
                     - If no valid trade details are found, return "NO_TRADE".`
                 },
@@ -86,9 +86,9 @@ async function extractTradeDetails(userInput) {
                     trade.action = "buy";
                 }
 
-                // Convert coin name to symbol
-                if (trade.coinSymbol && coinDictionary[trade.coinSymbol.toLowerCase()]) {
-                    trade.coinSymbol = coinDictionary[trade.coinSymbol.toLowerCase()];
+                // Convert abbreviation to full coin name
+                if (trade.coinName && coinDictionary[trade.coinName.toLowerCase()]) {
+                    trade.coinName = coinDictionary[trade.coinName.toLowerCase()];
                 }
 
                 // Ensure the condition is properly formatted
