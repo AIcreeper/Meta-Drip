@@ -11,19 +11,19 @@ const rl = readline.createInterface({
     output: process.stdout
 });
 
-// Mapping for coin abbreviations to full names
+// Mapping for coin abbreviations
 const coinDictionary = {
-    "sol": "Solana",
-    "btc": "Bitcoin",
-    "eth": "Ethereum",
-    "usdt": "Tether",
-    "ada": "Cardano",
+    "sol": "SOL",
+    "btc": "BTC",
+    "eth": "ETH",
+    "usdt": "USDT",
+    "ada": "ADA",
     "xrp": "XRP",
-    "ltc": "Litecoin",
-    "dot": "Polkadot",
-    "doge": "Dogecoin",
-    "matic": "Polygon",
-    "pepe": "Pepe Coin"
+    "ltc": "LTC",
+    "dot": "DOT",
+    "doge": "DOGE",
+    "matic": "MATIC",
+    "pepe": "PEPE"
 };
 
 async function extractTradeDetails(userInput) {
@@ -35,15 +35,17 @@ async function extractTradeDetails(userInput) {
                     role: "system", 
                     content: `Extract trade details from user input and return a JSON array.
                     - If multiple trades exist, return an array of objects.
-                    - "action" should be "buy" or "sell". Convert "swap" to "buy".
+                    - "action" should be "buy" or "sell".
+                    - Convert "swap":
+                      * "swap [fiat] for [crypto]" → "buy"
+                      * "swap [crypto] for [crypto]" → split into "sell" for the first coin & "buy" for the second coin.
                     - "amount" should be null unless a fiat value is explicitly mentioned.
                     - "coin_quantity" should be null unless the user explicitly mentions an amount in crypto.
-                    - "currency" is included only when a fiat amount is given.
-                    - "coinname" should always be the full name of the cryptocurrency.
-                    - "condition" should always exist and be formatted based on rules:
-                        1. If a price is mentioned (e.g., "if BTC crosses $60K"), return only "$60K".
-                        2. If a market trend is mentioned (e.g., "bull phase" or "bear phase"), return "bullish" or "bearish".
-                        3. If no clear condition is found, return null.
+                    - "coinname" should be the uppercase abbreviation.
+                    - "condition" rules:
+                      * Extract price if mentioned (e.g., "$60K").
+                      * If a trend is mentioned (e.g., "bull phase"), return "bullish" or "bearish".
+                      * If no condition is found, return null.
                     - If no valid trade details are found, return "NO_TRADE".`
                 },
                 { role: "user", content: `Analyze this input and return trade details as JSON:\n\n"${userInput}"` }
@@ -52,51 +54,29 @@ async function extractTradeDetails(userInput) {
         });
 
         const content = response.choices[0]?.message?.content.trim();
-        if (content === "NO_TRADE") {
-            return null;
-        }
+        if (content === "NO_TRADE") return null;
 
         const jsonMatch = content.match(/```json([\s\S]*?)```/);
         if (jsonMatch) {
             let trades = JSON.parse(jsonMatch[1]);
+            if (!Array.isArray(trades)) trades = [trades];
 
-            if (!Array.isArray(trades)) {
-                trades = [trades];
-            }
-
-            trades.forEach(trade => {
-                if (!trade || typeof trade !== "object") return;
-
-                // Convert "swap" to "buy"
-                if (trade.action && trade.action.toLowerCase() === "swap") {
-                    trade.action = "buy";
+            return trades.map(trade => {
+                if (!trade || typeof trade !== "object") return null;
+                
+                if (trade.action.toLowerCase() === "swap") trade.action = "buy";
+                if (trade.coinSymbol && coinDictionary[trade.coinSymbol.toLowerCase()]) {
+                    trade.coinSymbol = coinDictionary[trade.coinSymbol.toLowerCase()];
                 }
-
-                // Convert coin abbreviations to full names
-                if (trade.coinname && coinDictionary[trade.coinname.toLowerCase()]) {
-                    trade.coinname = coinDictionary[trade.coinname.toLowerCase()];
-                }
-
-                // Extract condition formatting
                 if (trade.condition) {
                     const priceMatch = trade.condition.match(/\$\d+K?/i);
-                    if (priceMatch) {
-                        trade.condition = priceMatch[0]; // Extracts "$60K"
-                    } else if (/bull|bullish/i.test(trade.condition)) {
-                        trade.condition = "bullish";
-                    } else if (/bear|bearish/i.test(trade.condition)) {
-                        trade.condition = "bearish";
-                    } else {
-                        trade.condition = null;
-                    }
+                    trade.condition = priceMatch ? priceMatch[0] : (/bull/i.test(trade.condition) ? "bullish" : (/bear/i.test(trade.condition) ? "bearish" : null));
                 }
-
-                // Ensure required fields always exist
-                trade.amount = trade.amount !== undefined ? trade.amount : null;
-                trade.coin_quantity = trade.coin_quantity !== undefined ? trade.coin_quantity : null;
-            });
-
-            return trades.length === 1 ? trades[0] : trades;
+                trade.amount = trade.amount ?? null;
+                trade.coin_quantity = trade.coin_quantity ?? null;
+                
+                return trade;
+            }).filter(Boolean);
         }
 
         return null;
@@ -116,7 +96,6 @@ async function generateGeneralResponse(userInput) {
             ],
             temperature: 0.5
         });
-
         return response.choices[0]?.message?.content.trim();
     } catch (error) {
         console.error("Error generating response:", error);
@@ -130,14 +109,11 @@ async function chatWithBot(userInput) {
             console.log("Please enter a valid query.");
             return;
         }
-
         const extractedTrades = await extractTradeDetails(userInput);
-
         if (extractedTrades) {
             console.log("Trade Details:", JSON.stringify(extractedTrades, null, 2));
         } else {
-            const generalResponse = await generateGeneralResponse(userInput);
-            console.log("Bot:", generalResponse);
+            console.log("Bot:", await generateGeneralResponse(userInput));
         }
     } catch (error) {
         console.error("Error:", error);
@@ -151,7 +127,6 @@ function startChat() {
             rl.close();
             return;
         }
-
         await chatWithBot(userInput);
         startChat();
     });
