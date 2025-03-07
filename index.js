@@ -11,28 +11,35 @@ const rl = readline.createInterface({
     output: process.stdout
 });
 
-// Coin abbreviation mapping
+// Coin abbreviation mapping to base symbol
 const coinDictionary = {
-    "sol": "Solana",
-    "btc": "Bitcoin",
-    "eth": "Ethereum",
-    "usdt": "Tether",
-    "ada": "Cardano",
+    "solana": "SOL",
+    "sol": "SOL",
+    "bitcoin": "BTC",
+    "btc": "BTC",
+    "ethereum": "ETH",
+    "eth": "ETH",
+    "tether": "USDT",
+    "usdt": "USDT",
+    "cardano": "ADA",
+    "ada": "ADA",
     "xrp": "XRP",
-    "ltc": "Litecoin",
-    "dot": "Polkadot",
-    "doge": "Dogecoin",
-    "matic": "Polygon",
-    "pepe": "Pepe"
+    "litecoin": "LTC",
+    "ltc": "LTC",
+    "polkadot": "DOT",
+    "dot": "DOT",
+    "dogecoin": "DOGE",
+    "doge": "DOGE",
+    "polygon": "MATIC",
+    "matic": "MATIC",
+    "pepe": "PEPE"
 };
 
 // Function to convert values like "$300K" → 300000, "$1M" → 1000000
 function convertAmountToNumber(amountStr) {
     if (!amountStr) return null;
-    
-    // Ensure input is a string
-    const amountStrCleaned = String(amountStr).trim();
 
+    const amountStrCleaned = String(amountStr).trim();
     const match = amountStrCleaned.match(/\$?(\d+(?:\.\d+)?)([KkMm]?)/);
     if (!match) return null;
 
@@ -56,7 +63,7 @@ async function extractTradeDetails(userInput) {
                     - If multiple trades exist, return an array.
                     - "action" should be "buy" or "sell". Convert "swap" to "buy".
                     - "coin_quantity" should be extracted if a number is mentioned for crypto.
-                    - "coinname" should be the full name (e.g., "Bitcoin" instead of "BTC").
+                    - "coinName" should return base symbols like BTC, ETH, SOL, XRP, etc.
                     - "condition" should only exist when a numeric condition is found (e.g., "if BTC crosses $60K" → 60000, "if a whale buys $1M BTC" → 1000000).
                     - If no valid trade details are found, return "NO_TRADE".`
                 },
@@ -86,9 +93,13 @@ async function extractTradeDetails(userInput) {
                     trade.action = "buy";
                 }
 
-                // Convert abbreviation to full coin name
-                if (trade.coinName && coinDictionary[trade.coinName.toLowerCase()]) {
-                    trade.coinName = coinDictionary[trade.coinName.toLowerCase()];
+                // Convert full name to base symbol
+                const reverseCoinDictionary = Object.fromEntries(
+                    Object.entries(coinDictionary).map(([abbr, full]) => [full.toLowerCase(), abbr.toUpperCase()])
+                );
+
+                if (trade.coinName && reverseCoinDictionary[trade.coinName.toLowerCase()]) {
+                    trade.coinName = reverseCoinDictionary[trade.coinName.toLowerCase()];
                 }
 
                 // Ensure the condition is properly formatted
@@ -102,7 +113,12 @@ async function extractTradeDetails(userInput) {
                 trade.coin_quantity = trade.coin_quantity !== undefined ? trade.coin_quantity : null;
             });
 
-            return trades.length === 1 ? trades[0] : trades;
+            // Construct final response with a message
+            const coinSymbol = trades[0]?.coinName || "crypto";
+            return {
+                message: `You have successfully subscribed to the ${coinSymbol} trade.`,
+                "Trade Details": trades
+            };
         }
 
         return null;
@@ -111,6 +127,7 @@ async function extractTradeDetails(userInput) {
         return null;
     }
 }
+
 
 async function generateGeneralResponse(userInput) {
     try {
